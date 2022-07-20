@@ -18,7 +18,7 @@ db_engine = get_engine(DB_NAME, DB_TYPE, DB_ADDRESS, DB_USERNAME, DB_PASSWORD, D
 today = date.today()
 today_label = today.strftime("%Y-%m-%d")
 
-set_log_level("DEBUG")
+set_log_level("INFO")
 
 # ha stands for Horse API - The Other data source
 if not db_engine:
@@ -241,29 +241,32 @@ def main(update=False, inserts=False, local_run=False):
     race_sync_columns = ['source', 'id', 'fk_track_id', 'race_num', 'race_class', 'race_sex', 'off_at_time', 'race_track_surf', 'purse_usd_size']
     merged_race_data = pd.concat([race_scrape_records[race_sync_columns], race_db_records[race_sync_columns]], ignore_index=True)
     merged_race_data = merged_race_data.query('id != ""')
-    merged_race_data = merged_race_data[merged_race_data.groupby('id').id.transform('count') > 1]
+    if not merged_race_data.empty:
+        merged_race_data = merged_race_data[merged_race_data.groupby('id').id.transform('count') > 1]
 
-    # At random times... the Race Number may not be a race number
-    merged_race_data = merged_race_data[merged_race_data.id.apply(lambda x: str(x).isnumeric())]
-    merged_race_data = merged_race_data[merged_race_data.race_num.apply(lambda x: str(x).isnumeric())]
-    merged_race_data['id'], merged_race_data['race_num'] = merged_race_data['id'].astype(int), merged_race_data['race_num'].astype(int)
-    merged_race_data.drop_duplicates(subset=race_sync_columns[1:], keep=False, inplace=True)
+        # At random times... the Race Number may not be a race number
+        merged_race_data = merged_race_data[merged_race_data.id.apply(lambda x: str(x).isnumeric())]
+        merged_race_data = merged_race_data[merged_race_data.race_num.apply(lambda x: str(x).isnumeric())]
+        merged_race_data['id'], merged_race_data['race_num'] = merged_race_data['id'].astype(int), merged_race_data['race_num'].astype(int)
+        merged_race_data.drop_duplicates(subset=race_sync_columns[1:], keep=False, inplace=True)
 
     # Merge Bet Types
     btypes_sync_columns = ['source', 'id', 'fk_race_id', 'bet_type']
     merged_btypes_data = pd.concat([bet_types_scrape_records[btypes_sync_columns], bet_types_db_records[btypes_sync_columns]], ignore_index=True)
     merged_btypes_data = merged_btypes_data.query('id != ""')
-    merged_btypes_data = merged_btypes_data[merged_btypes_data.groupby('id').id.transform('count') > 1]
-    merged_btypes_data['id'], merged_btypes_data['fk_race_id'] = merged_btypes_data['id'].astype(int), merged_btypes_data['fk_race_id'].astype(int)
-    merged_btypes_data.drop_duplicates(subset=btypes_sync_columns[1:], keep=False, inplace=True)
+    if not merged_btypes_data.empty:
+        merged_btypes_data = merged_btypes_data[merged_btypes_data.groupby('id').id.transform('count') > 1]
+        merged_btypes_data['id'], merged_btypes_data['fk_race_id'] = merged_btypes_data['id'].astype(int), merged_btypes_data['fk_race_id'].astype(int)
+        merged_btypes_data.drop_duplicates(subset=btypes_sync_columns[1:], keep=False, inplace=True)
 
     # Merge Race Results
     res_sync_columns = ['source', 'id', 'race_id', 'horse_id', 'pgm', 'fin_place']
     merged_res_data = pd.concat([race_results_scrape_records[res_sync_columns], race_res_db_records[res_sync_columns]], ignore_index=True)
     merged_res_data = merged_res_data.query('id != ""')
-    merged_res_data = merged_res_data[merged_res_data.groupby('id').id.transform('count') > 1]
-    merged_res_data['id'], merged_res_data['horse_id'] = merged_res_data['id'].astype(int), merged_res_data['horse_id'].astype(int)
-    merged_res_data.drop_duplicates(subset=res_sync_columns[1:], keep=False, inplace=True)
+    if not merged_res_data.empty:
+        merged_res_data = merged_res_data[merged_res_data.groupby('id').id.transform('count') > 1]
+        merged_res_data['id'], merged_res_data['horse_id'] = merged_res_data['id'].astype(int), merged_res_data['horse_id'].astype(int)
+        merged_res_data.drop_duplicates(subset=res_sync_columns[1:], keep=False, inplace=True)
 
     with pd.ExcelWriter(f'{today_label}-HRNation-2.xlsx') as writer:
         
