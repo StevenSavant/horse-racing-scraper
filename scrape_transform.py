@@ -1,5 +1,7 @@
 
 import pandas as pd
+
+from utils import log_error
 track_columns = ['track_name', 'id']
 horses_columns = ['name', 'id']
 race_results_columns = ['race_id', 'horse_name', 'horse_id', 'pgm', 'fin_place', 'id']
@@ -26,6 +28,9 @@ def build_scaped_races(scrape_data, tracks_df):
                 if race_num == 'id':
                     continue
 
+                if not tracks_df.loc[track_name]['id']:
+                    break
+
                 record = {x : '' for x in race_columns}
                 record['race_date'] = day
                 record['fk_track_id'] = tracks_df.loc[track_name]['id']
@@ -49,8 +54,19 @@ def build_scraped_bet_types(scrape_data, race_df, track_df):
                 if race_num == 'id':
                     continue
 
+                if not track_df.loc[track_name]['id']:
+                    break
+
                 race_row = race_df.query(f"fk_track_id == {track_df.loc[track_name]['id']} & race_num == '{race_num}'", engine='python')
-                bet_types = scrape_data[day][track_name][race_num]['pool'].to_dict()
+                if race_row.empty:
+                    continue
+                
+                try:
+                    bet_types = scrape_data[day][track_name][race_num]['pool'].to_dict()
+                except Exception as e:
+                    # Not all races have pool listings, and the data type is inconsistent
+                    # TODO: fix this in the scrape models
+                    continue
 
                 if race_row.empty or not (race_row.iloc[0]['id']):
                     # not enough data to decide if it's missing
@@ -74,21 +90,27 @@ def build_race_results(scrape_data, race_df, track_df):
                 if race_num == 'id':
                     continue
                 
+                if not track_df.loc[track_name]['id']:
+                    break
+
                 race_row = race_df.query(f"fk_track_id == {track_df.loc[track_name]['id']} & race_num == '{race_num}'", engine='python')
 
                 if race_row.empty or not (race_row.iloc[0]['id']):
                     # This race is not in the database at all
                     continue
 
-                # The 'runners' table holds the actual race results
-                runners = scrape_data[day][track_name][race_num]['runners']
-                runners = runners.rename({'Runner':'horse_name', 'Horse Number' : 'pgm'}, axis='columns')
-                runners.index += 1
-                runners.index.name = 'fin_place'
-                runners.reset_index(inplace=True)
-                runners['id'] = ''
-                runners['race_id'] = race_row.iloc[0]['id']
-                runners['horse_id'] = ''
-                df = pd.concat([df, runners[['race_id', 'horse_name', 'horse_id', 'fin_place', 'pgm', 'id']]], ignore_index=True)
+                # The 'runners' table (if it exists) holds the actual race results
+                try:
+                    runners = scrape_data[day][track_name][race_num]['runners']
+                    runners = runners.rename({'Runner':'horse_name', 'Horse Number' : 'pgm'}, axis='columns')
+                    runners.index += 1
+                    runners.index.name = 'fin_place'
+                    runners.reset_index(inplace=True)
+                    runners['id'] = ''
+                    runners['race_id'] = race_row.iloc[0]['id']
+                    runners['horse_id'] = ''
+                    df = pd.concat([df, runners[['race_id', 'horse_name', 'horse_id', 'fin_place', 'pgm', 'id']]], ignore_index=True)
+                except Exception as e:
+                    continue
 
     return df 

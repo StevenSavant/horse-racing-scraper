@@ -12,6 +12,7 @@ DB_ADDRESS = os.getenv("DB_ADDRESS", None)
 DB_PORT = os.getenv("DB_PORT", None)
 DB_NAME = os.getenv("DB_NAME", None)
 DB_TYPE = os.getenv("DB_TYPE", None)
+DB_INSERTS = os.getenv("DB_INSERTS", "No")
 
 db_engine = get_engine(DB_NAME, DB_TYPE, DB_ADDRESS, DB_USERNAME, DB_PASSWORD, DB_PORT)
 today = date.today()
@@ -69,11 +70,13 @@ def append_horse_ids(row, db_records):
 
 
 def append_race_res_ids(row, db_records):
-    y, z = row['race_id'], row['horse_id']
+    u_row = row.copy()
+    y, z = u_row['race_id'], u_row['horse_id']
     try:
-        result =db_records.query(f"race_id == {y} & horse_id == '{z}'", engine='python')
+        result =db_records.query(f"race_id == {y} & horse_id == {z}", engine='python')
         if not result.empty:
-            row['id'] = result.iloc[0]['id']
+            u_row['id'] = result.iloc[0]['id']
+            return u_row
     except Exception as e:
         log_error(f'failed to append race result ids for race: {y}, horse {z}, horse name: {row["horse_name"]} with error: {e}')
 
@@ -115,18 +118,19 @@ def main(update=False, inserts=False, local_run=False):
 
     log_blue(f'\n{track_db_records}\n')
     log_success(f'\n{track_scrape_records[["id"]]}\n')
+    existing_tracks = track_scrape_records.query('id != ""')
 
 
     # <----------- Races ----------- >
 
     race_scrape_records = build_scaped_races(scrape_data=scrape_data, tracks_df=track_scrape_records)
-    query, params = build_races_day_query(race_scrape_records, track_scrape_records, today_label)
+    query, params = build_races_day_query(race_scrape_records, existing_tracks, today_label)
     
     log_debug(query)
     log_debug(params)
 
     try:
-        race_db_records = pd.read_sql(sql=query, con=db_engine, params=params)
+        race_db_records = pd.read_sql(sql=query, con=db_engine, params=params, coerce_float=False)
         race_scrape_records.apply(append_race_ids, axis=1, db_records=race_db_records)  ## There's a better way to do this
     except Exception as e:
         log_error(f'Failed to read database races: {e}')
@@ -148,7 +152,7 @@ def main(update=False, inserts=False, local_run=False):
         log_debug(params)
 
         try:
-            bet_types_db_records = pd.read_sql(sql=query, con=db_engine, params=params)
+            bet_types_db_records = pd.read_sql(sql=query, con=db_engine, params=params, coerce_float=False)
         except Exception as e:
             log_error(f'Failed to read database bet types: {e}')
             exit('Aborting Sync')
@@ -172,7 +176,7 @@ def main(update=False, inserts=False, local_run=False):
         log_debug(f'\n{params}\n')
 
         try:
-            horses_db_records = pd.read_sql(sql=query, con=db_engine, params=params)
+            horses_db_records = pd.read_sql(sql=query, con=db_engine, params=params, coerce_float=False)
             horses_db_records.dropna(inplace=True)
         except Exception as e:
             log_error(f'Failed to read database horses: {e}')
@@ -180,21 +184,30 @@ def main(update=False, inserts=False, local_run=False):
         
         horses_db_records['name'] = horses_db_records['name'].str.lower()
         race_results_scrape_records = race_results_scrape_records.apply(append_horse_ids, axis=1, db_records=horses_db_records)
+        race_results_scrape_records['race_id'] = race_results_scrape_records['race_id'].fillna(0)
+        race_results_scrape_records['race_id'] = race_results_scrape_records['race_id'].astype(int)
+        race_results_scrape_records['horse_id'] = race_results_scrape_records['horse_id'].fillna(0)
+        race_results_scrape_records['horse_id'] = race_results_scrape_records['horse_id'].astype(int)
+        race_results_scrape_records['pgm'] = race_results_scrape_records['pgm'].fillna(0)
+        race_results_scrape_records['pgm'] = race_results_scrape_records['pgm'].astype(int)
+        race_results_scrape_records['fin_place'] = race_results_scrape_records['fin_place'].fillna(0)
+        race_results_scrape_records['fin_place'] = race_results_scrape_records['fin_place'].astype(int)
 
         log_blue(f"\n{horses_db_records.sort_values(by='name')}")
         log_success(race_results_scrape_records[['horse_name', 'horse_id']].sort_values(by='horse_name'))
-        
+        race_results_scrape_records.dropna(inplace=True)
+
         query, params = build_race_results_query(race_results_scrape_records)
 
         log_debug(f'\n\n{query}\n\n')
         log_debug(f'\n\n{params}\n\n')
 
         try:
-            race_res_db_records = pd.read_sql(sql=query, con=db_engine, params=params)
+            race_res_db_records = pd.read_sql(sql=query, con=db_engine, params=params, coerce_float=False)
         except Exception as e:
             log_error(f'Failed to read database race results: {e}')
             exit('Aborting Sync')
-        race_results_scrape_records.apply(append_race_res_ids, axis=1, db_records=race_res_db_records)
+        race_results_scrape_records = race_results_scrape_records.apply(append_race_res_ids, axis=1, db_records=race_res_db_records)
 
         log_blue(f'\n{race_res_db_records}')
         log_success(f'\n{race_results_scrape_records}')
@@ -229,6 +242,10 @@ def main(update=False, inserts=False, local_run=False):
     merged_race_data = pd.concat([race_scrape_records[race_sync_columns], race_db_records[race_sync_columns]], ignore_index=True)
     merged_race_data = merged_race_data.query('id != ""')
     merged_race_data = merged_race_data[merged_race_data.groupby('id').id.transform('count') > 1]
+
+    # At random times... the Race Number may not be a race number
+    merged_race_data = merged_race_data[merged_race_data.id.apply(lambda x: str(x).isnumeric())]
+    merged_race_data = merged_race_data[merged_race_data.race_num.apply(lambda x: str(x).isnumeric())]
     merged_race_data['id'], merged_race_data['race_num'] = merged_race_data['id'].astype(int), merged_race_data['race_num'].astype(int)
     merged_race_data.drop_duplicates(subset=race_sync_columns[1:], keep=False, inplace=True)
 
@@ -270,7 +287,7 @@ def main(update=False, inserts=False, local_run=False):
         log_info('Attempting Database Update in place')
         log_warn('Feature not Ready')
 
-    if inserts:
+    if inserts == 'Yes':
         export_missing_data['Missing Results']['records'].drop(columns='horse_name', inplace=True)
 
         for k, v in export_missing_data.items():
@@ -285,7 +302,7 @@ def main(update=False, inserts=False, local_run=False):
                     log_info(f"Skipping table insert: {v['table']}")
                     break
             log_blue('Proceeding with insert')
-            continue
+
             try:
                 v['records'].drop(columns='id', inplace=True)
                 changes = v['records'].to_sql(v['table'], con=db_engine, if_exists='append', index=False)
@@ -300,4 +317,4 @@ if __name__ == "__main__":
     log_debug('Starting Horse-Racing-Nation Scraper')
     # resp = get_update_confirmation('tablename', 'Insert', pd.DataFrame(columns=['test1', 'test2', 'test3']))
     # print(resp)
-    main(inserts=True, local_run=True)
+    main(inserts=DB_INSERTS, local_run=False)
