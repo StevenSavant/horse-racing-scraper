@@ -1,28 +1,20 @@
 """
 Webscraper that pulls Race/Race Results from HorseRacingNation.com
-This created Pandas Dataframes for each Race/Race Results based on the 3 Data tables for each Race
+This creates Pandas Dataframes for each Race/Race Results based on the 3 Data tables for each Race
 
 Tables:
+    Race (race information header)
     Race Results
     Runner
     Pool
-
-Extra:
-    Also Rans
-    Fractions and final time
-    Winning Ower
-    Winning Breeder
-
-:return: _description_
-:rtype: _type_
 """
 
-# import warnings
+import warnings
 import pandas as pd
 from utils import log_debug, fetch_session, log_error, log_info, log_warn, set_log_level
 from lxml.etree import tostring
 from lxml.html import fromstring
-# warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 _session = fetch_session()
 
@@ -43,7 +35,7 @@ def trasnform_dataframe(record):
 
 
 
-def horse_racing_scrape(days=['all']):
+def horse_racing_scrape(days=['all'], debug=False):
     global _session
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15"
@@ -182,8 +174,9 @@ def horse_racing_scrape(days=['all']):
                 df = pd.concat([df,pool_df],axis=1, ignore_index=True)
                 main_df = main_df.append(df, ignore_index=True)
 
-                if len(table_dfs[datekey].keys()) >= 3:
-                    return table_dfs
+                if debug:
+                    if len(table_dfs[datekey].keys()) >= 3:
+                        return table_dfs
 
         log_debug('Trimming Data Columns')
         try:
