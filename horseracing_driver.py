@@ -1,4 +1,5 @@
 import os
+from numpy import empty
 import pandas as pd
 from dbhandler import *
 from datetime import date
@@ -17,7 +18,6 @@ DB_INSERTS = os.getenv("DB_INSERTS", "No")
 db_engine = get_engine(DB_NAME, DB_TYPE, DB_ADDRESS, DB_USERNAME, DB_PASSWORD, DB_PORT)
 today = date.today()
 today_label = today.strftime("%Y-%m-%d")
-
 set_log_level("INFO")
 
 # ha stands for Horse API - The Other data source
@@ -268,21 +268,26 @@ def main(update=False, inserts=False, local_run=False):
         merged_res_data['id'], merged_res_data['horse_id'] = merged_res_data['id'].astype(int), merged_res_data['horse_id'].astype(int)
         merged_res_data.drop_duplicates(subset=res_sync_columns[1:], keep=False, inplace=True)
 
-    with pd.ExcelWriter(f'{today_label}-HRNation-2.xlsx') as writer:
-        
-        if not merged_race_data.empty:
-            sorted_race_data = merged_race_data.sort_values(by=['id', 'source'])
-            sorted_race_data.to_excel(writer, sheet_name='Race Differences')
+    empties = [merged_race_data.empty, merged_res_data.empty, merged_btypes_data.empty]
+    empties += [x['records'].empty for x in export_missing_data.values() if 'records' in x]
+    if not all(empties):
+        with pd.ExcelWriter(f'{today_label}-HRNation-2.xlsx') as writer:
+            
+            if not merged_race_data.empty:
+                sorted_race_data = merged_race_data.sort_values(by=['id', 'source'])
+                sorted_race_data.to_excel(writer, sheet_name='Race Differences')
 
-        if not merged_res_data.empty:
-            sorted_res_data = merged_res_data.sort_values(by=['id', 'source'])
-            sorted_res_data.to_excel(writer, sheet_name='Results Differences')
+            if not merged_res_data.empty:
+                sorted_res_data = merged_res_data.sort_values(by=['id', 'source'])
+                sorted_res_data.to_excel(writer, sheet_name='Results Differences')
 
-        if not merged_btypes_data.empty:
-            sorted_btypes_data = merged_btypes_data.sort_values(by=['id', 'source'])
-            sorted_btypes_data.to_excel(writer, sheet_name='Bet Type Differences')
+            if not merged_btypes_data.empty:
+                sorted_btypes_data = merged_btypes_data.sort_values(by=['id', 'source'])
+                sorted_btypes_data.to_excel(writer, sheet_name='Bet Type Differences')
 
-        [export_missing_data[k]['records'].to_excel(writer, sheet_name=k) for k, v in export_missing_data.items() if not export_missing_data[k]['records'].empty]
+            [export_missing_data[k]['records'].to_excel(writer, sheet_name=k) for k, v in export_missing_data.items() if not export_missing_data[k]['records'].empty]
+    else:
+        log_success('Nothing to update! Database is Synced!')
 
 
 
@@ -290,8 +295,11 @@ def main(update=False, inserts=False, local_run=False):
         log_info('Attempting Database Update in place')
         log_warn('Feature not Ready')
 
+    log_info('Inserts:' + inserts)
     if inserts == 'Yes':
+        log_blue('Inserting missing records')
         export_missing_data['Missing Results']['records'].drop(columns='horse_name', inplace=True)
+
 
         for k, v in export_missing_data.items():
 
@@ -320,4 +328,4 @@ if __name__ == "__main__":
     log_debug('Starting Horse-Racing-Nation Scraper')
     # resp = get_update_confirmation('tablename', 'Insert', pd.DataFrame(columns=['test1', 'test2', 'test3']))
     # print(resp)
-    main(inserts=DB_INSERTS, local_run=False)
+    main(inserts=DB_INSERTS, local_run=True)
