@@ -92,7 +92,7 @@ def main(update=False, inserts=False, local_run=False):
     scrape_data = None
 
     # Override date for testing
-    today_label = '2022-07-08'
+    # today_label = '2022-07-08'
 
     # <----------- Scraper ----------- >
 
