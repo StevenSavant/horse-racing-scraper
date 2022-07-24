@@ -174,9 +174,10 @@ def horse_racing_scrape(days=['all'], debug=False):
                 df = pd.concat([df,pool_df],axis=1, ignore_index=True)
                 main_df = main_df.append(df, ignore_index=True)
 
-                if debug:
-                    if len(table_dfs[datekey].keys()) >= 3:
-                        return table_dfs
+                # # Grab SampleSet for Testing
+                # if debug:
+                #     if len(table_dfs[datekey].keys()) >= 3:
+                #         return table_dfs
 
         log_debug('Trimming Data Columns')
         try:

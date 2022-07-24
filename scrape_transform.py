@@ -1,7 +1,7 @@
 
 import pandas as pd
 
-from utils import log_error
+from utils import log_info, log_debug
 track_columns = ['track_name', 'id']
 horses_columns = ['name', 'id']
 race_results_columns = ['race_id', 'horse_name', 'horse_id', 'pgm', 'fin_place', 'id']
@@ -28,20 +28,21 @@ def build_scaped_races(scrape_data, tracks_df):
                 if race_num == 'id':
                     continue
 
-                if not tracks_df.loc[track_name]['id']:
+                try:
+                    record = {x : '' for x in race_columns}
+                    record['race_date'] = day
+                    record['fk_track_id'] = tracks_df.loc[track_name]['id']
+                    record['race_num'] = race_num
+                    record['off_at_time'] = scrape_data[day][track_name][race_num]['ap']['Race Time']
+                    record['race_track_dist'] = scrape_data[day][track_name][race_num]['ap']['Length']
+                    record['race_track_surf'] = scrape_data[day][track_name][race_num]['ap']['Surface']
+                    record['race_class'] = scrape_data[day][track_name][race_num]['ap']['Race Class']
+                    record['race_sex'] = scrape_data[day][track_name][race_num]['ap']['Sex']
+                    record['purse_usd_size'] = scrape_data[day][track_name][race_num]['ap']['Purse']
+                    df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
+                except Exception as e:
+                    log_info(f'Skipping Track: {track_name}: {e}')
                     break
-
-                record = {x : '' for x in race_columns}
-                record['race_date'] = day
-                record['fk_track_id'] = tracks_df.loc[track_name]['id']
-                record['race_num'] = race_num
-                record['off_at_time'] = scrape_data[day][track_name][race_num]['ap']['Race Time']
-                record['race_track_dist'] = scrape_data[day][track_name][race_num]['ap']['Length']
-                record['race_track_surf'] = scrape_data[day][track_name][race_num]['ap']['Surface']
-                record['race_class'] = scrape_data[day][track_name][race_num]['ap']['Race Class']
-                record['race_sex'] = scrape_data[day][track_name][race_num]['ap']['Sex']
-                record['purse_usd_size'] = scrape_data[day][track_name][race_num]['ap']['Purse']
-                df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
     
     return df
 
@@ -53,31 +54,23 @@ def build_scraped_bet_types(scrape_data, race_df, track_df):
             for race_num in scrape_data[day][track_name]:
                 if race_num == 'id':
                     continue
-
-                if not track_df.loc[track_name]['id']:
-                    break
-
-                race_row = race_df.query(f"fk_track_id == {track_df.loc[track_name]['id']} & race_num == '{race_num}'", engine='python')
-                if race_row.empty:
-                    continue
                 
                 try:
+                    race_row = race_df.query(f"fk_track_id == {track_df.loc[track_name]['id']} & race_num == '{race_num}'", engine='python')
                     bet_types = scrape_data[day][track_name][race_num]['pool'].to_dict()
+
+                    if race_row.empty or not (race_row.iloc[0]['id']):
+                        # not enough data to decide if it's missing
+                        continue
+
+                    for v in bet_types['Pool'].values():
+                        record = {x : '' for x in bet_type_columns}
+                        record['fk_race_id'] = race_row.iloc[0]['id']
+                        record['bet_type'] = v.upper()
+                        df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
                 except Exception as e:
-                    # Not all races have pool listings, and the data type is inconsistent
-                    # TODO: fix this in the scrape models
-                    continue
+                    log_debug(f'Skipping Bet Types for missing track/race: {track_name}/{race_num}: {e}')
 
-                if race_row.empty or not (race_row.iloc[0]['id']):
-                    # not enough data to decide if it's missing
-                    continue
-
-                for v in bet_types['Pool'].values():
-                    record = {x : '' for x in bet_type_columns}
-                    record['fk_race_id'] = race_row.iloc[0]['id']
-                    record['bet_type'] = v.upper()
-                    df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
-    
     return df
 
 
@@ -90,27 +83,21 @@ def build_race_results(scrape_data, race_df, track_df):
                 if race_num == 'id':
                     continue
                 
-                if not track_df.loc[track_name]['id']:
-                    break
-
                 race_row = race_df.query(f"fk_track_id == {track_df.loc[track_name]['id']} & race_num == '{race_num}'", engine='python')
 
                 if race_row.empty or not (race_row.iloc[0]['id']):
                     # This race is not in the database at all
                     continue
 
-                # The 'runners' table (if it exists) holds the actual race results
-                try:
-                    runners = scrape_data[day][track_name][race_num]['runners']
-                    runners = runners.rename({'Runner':'horse_name', 'Horse Number' : 'pgm'}, axis='columns')
-                    runners.index += 1
-                    runners.index.name = 'fin_place'
-                    runners.reset_index(inplace=True)
-                    runners['id'] = ''
-                    runners['race_id'] = race_row.iloc[0]['id']
-                    runners['horse_id'] = ''
-                    df = pd.concat([df, runners[['race_id', 'horse_name', 'horse_id', 'fin_place', 'pgm', 'id']]], ignore_index=True)
-                except Exception as e:
-                    continue
+                # The 'runners' table holds the actual race results
+                runners = scrape_data[day][track_name][race_num]['runners']
+                runners = runners.rename({'Runner':'horse_name', 'Horse Number' : 'pgm'}, axis='columns')
+                runners.index += 1
+                runners.index.name = 'fin_place'
+                runners.reset_index(inplace=True)
+                runners['id'] = ''
+                runners['race_id'] = race_row.iloc[0]['id']
+                runners['horse_id'] = ''
+                df = pd.concat([df, runners[['race_id', 'horse_name', 'horse_id', 'fin_place', 'pgm', 'id']]], ignore_index=True)
 
     return df 
