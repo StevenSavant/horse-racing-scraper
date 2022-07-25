@@ -79,7 +79,7 @@ class ScrapeTracks(ScrapeTable):
 
 
 class ScrapeRaces(ScrapeTable):
-    def __init__(self, scrape_data=None, tracks=None, number_field=None, date_filed=None, id_field='id'):
+    def __init__(self, scrape_data=None, tracks=None, number_field=None, date_filed=None, sts_field=None, dist_field=None, id_field='id'):
         self._ids = id_field
         self._number = number_field
         self._dates = date_filed
@@ -265,13 +265,17 @@ class ScrapeBetTypes(ScrapeTable):
 
 
 class ScrapeRaceResult(ScrapeTable):
-    def __init__(self, scrape_data=None, race_df=None, track_df=None, race_id=None, pgm=None, fin_place=None, id_field='id'):
+    def __init__(self,  scrape_data=None, race_df=None, track_df=None, 
+                        race_id=None, pgm=None, fin_place=None, id_field='id'):
         self._ids = id_field
         self._race_id = race_id
         self._horse_name = 'horse_name'     # will add horse name to this dataframe
         self._pgm = pgm
         self._fin_place = fin_place
         self._records = None
+        self._missing_horses = None
+        self._missing_trainers = None
+        self._missing_jockeys = None
         self._build_from_scrap_object(scrape_data, race_df, track_df)
         return None
 
@@ -300,8 +304,38 @@ class ScrapeRaceResult(ScrapeTable):
 
                     # The 'runners' table (if it exists) holds the actual race results
                     try:
+                        # the `#` coloumn is scratched
                         runners = scrape_data[day][track_name][race_num]['runners']
-                        runners = runners.rename({'Runner':'horse_name', 'Horse Number' : 'pgm'}, axis='columns')
+                        race_res = scrape_data[day][track_name][race_num]['race_results'][['Horse', 'Sire', 'Trainer', 'Jockey', '#']]
+                        also_ran = scrape_data[day][track_name][race_num]['also_ran'].to_dict()
+
+                        for k in sorted(also_ran['Also Rans'].keys()):
+                            try:
+                                name = also_ran['Also Rans'][k]
+
+                                if name == '':
+                                    break
+                            
+                                horse_res = scrape_data[day][track_name][race_num]['race_results'].query(f'Horse == "{name}"')
+                                runners = runners.append({
+                                        'Runner' : name,
+                                        'Horse Number' : horse_res.iloc[0]['PP'],
+                                        'Win' : '-', 
+                                        'Place' : '-', 
+                                        'Show' : '-',
+                                    }, 
+                                    ignore_index=True
+                                )
+                            except Exception as e:
+                                # This should never happend, but if it does... it's not a show stopper
+                                log_warn(f'error reading also_ran horse: {e}')
+                                continue
+
+
+                        runners = runners.rename({'Runner':'horse_name', 'Horse Number' : 'pgm', 'Win' : 'wps_win', 'Place' : 'wps_place', 'Show' : 'wps_show'}, axis='columns')
+                        race_res = race_res.rename({'Horse':'horse_name', 'Sire' : 'sire', 'Trainer' : 'trainer', 'Jockey' : 'jockey', '#' : 'scratched'}, axis='columns')
+                        runners =runners.merge(race_res, on='horse_name')
+
                         runners['pgm'] = runners['pgm'].astype(int)
                         runners['pgm'] = runners['pgm'].astype(str)
                         runners.index += 1
@@ -310,34 +344,80 @@ class ScrapeRaceResult(ScrapeTable):
                         runners['id'] = ''
                         runners['race_id'] = race_row.iloc[0]['id']
                         runners['horse_id'] = ''
-                        df = pd.concat([df, runners[['race_id', 'horse_name', 'horse_id', 'fin_place', 'pgm', 'id']]], ignore_index=True)
+                        runners['jockey_id'] = ''
+                        runners['trainer_id'] = ''
+                        df = pd.concat([df, runners], ignore_index=True)
                     except Exception as e:
                         continue
 
         self._records = df 
 
-    def _append_horse_ids(self, row, db_records):
+    def _append_forign_ids(self, row, horse_db_records, trainer_db_records, jockey_db_records):
         xrow = row.copy()
-        x = xrow['horse_name']
-        x = x.lower()
+        x = xrow['horse_name'].lower()
+        y = xrow['trainer'].lower()
+        z = xrow['jockey'].lower()
         try:
-            result = db_records.query(f'name == "{x}"', engine='python')
+            result = horse_db_records.query(f'name == "{x}"', engine='python')
+            result1 = trainer_db_records.query(f'name == "{y}"', engine='python')
+            result2 = jockey_db_records.query(f'name == "{z}"', engine='python')
+
             if not result.empty:
+                log_debug(f'Associating id with horse: {x}')
                 xrow['horse_id'] = result.loc[result.index[0], 'id']
-                return xrow
             else:
-                log_blue(f'could not find match for horse name: {x}')
-        except:
-            log_error(f'failed to match horse name: {x} to id')
+                log_debug(f'could not find match for horse name: {x}')
+                xrow['horse_id'] = 0
+
+            if not result1.empty:
+                log_debug(f'Associating id with trainer: {y}')
+                xrow['trainer_id'] = result1.loc[result1.index[0], 'id']
+            else:
+                log_debug(f'could not find match for trainer name: {y}')
+                xrow['trainer_id'] = 0
+
+            if not result2.empty:
+                log_debug(f'Associating id with jockey: {z}')
+                xrow['jockey_id'] = result2.loc[result2.index[0], 'id']
+            else:
+                log_debug(f'could not find match for jockey name: {z}')
+                xrow['jockey_id'] = 0
+            
+            return xrow
+        except Exception as e:
+            log_error(f'failed to match any foreign (horse/jockey/trainer) keys name for horse: {x} to ids: {e}')
     
 
-    def attach_horse_ids(self, database_df):
-        """Uses database table to find associated horse records and appends thier id's if they exist. This is needed for the race results.
+    def get_missing_horses(self):
+        self._missing_horses = self._missing_horses.rename({'horse_name' : 'name'}, axis='columns')
+        self._missing_horses['id'] = ''
+        self._missing_horses.drop_duplicates(keep='first', inplace=True)
+        return self._missing_horses
 
-        :param database_df: database dataframe as retured from the pd.read_sql()
-        :type database_df: pandads.Dataframe
+    def get_missing_trainers(self):
+        self._missing_trainers = self._missing_trainers.rename({'trainer' : 'name'}, axis='columns')
+        self._missing_trainers['id'] = ''
+        self._missing_trainers.drop_duplicates(keep='first', inplace=True)
+        return self._missing_trainers
+
+    def get_missing_jockeys(self):
+        self._missing_jockeys = self._missing_jockeys.rename({'jockey' : 'name'}, axis='columns')
+        self._missing_jockeys['id'] = ''
+        self._missing_jockeys.drop_duplicates(keep='first', inplace=True)
+        return self._missing_jockeys
+
+    def attach_fk_ids(self, horse_df, train_df, jock_df):
+        """Uses horse_df table to find associated horse, jockey, and trainer records and appends thier id's if they exist. This is needed for the race results.
+        :param horse_df: database dataframe as retured from the pd.read_sql()
+        :type horse_df: pandads.Dataframe
         """
-        self._records = self._records.apply(self._append_horse_ids, axis=1, db_records=database_df)
+        self._records = self._records.apply(
+            self._append_forign_ids, 
+            axis=1,
+            horse_db_records=horse_df,
+            trainer_db_records=train_df,
+            jockey_db_records=jock_df,
+        )
 
 
     def _append_race_res_ids(self, row, db_records):
@@ -370,13 +450,22 @@ class ScrapeRaceResult(ScrapeTable):
         self._records['race_id'] = self._records['race_id'].astype(int)
         self._records['horse_id'] = self._records['horse_id'].fillna(0)
         self._records['horse_id'] = self._records['horse_id'].astype(int)
+        self._records['trainer_id'] = self._records['trainer_id'].fillna(0)
+        self._records['trainer_id'] = self._records['trainer_id'].astype(int)
+        self._records['jockey_id'] = self._records['jockey_id'].fillna(0)
+        self._records['jockey_id'] = self._records['jockey_id'].astype(int)
         self._records['pgm'] = self._records['pgm'].fillna(0)
         self._records['pgm'] = self._records['pgm'].astype(str)
         self._records['fin_place'] = self._records['fin_place'].fillna(0)
         self._records['fin_place'] = self._records['fin_place'].astype(int)
 
         # Drops records with missing horses or missing Races
-        self._records.dropna(inplace=True)
+        self._missing_horses = self._records.query('horse_id == 0')[['horse_name', 'sire']].copy()
+        self._missing_trainers = self._records.query('trainer_id == 0')[['trainer']].copy()
+        self._missing_jockeys = self._records.query('jockey_id == 0')[['jockey']].copy()
+        self._records = self._records[self._records.horse_id != 0]
+        self._records = self._records[self._records.trainer_id != 0]
+        self._records = self._records[self._records.jockey_id != 0]
 
     def merge_records(self, db_records):
         """Merges this scrape table with the coresponding database records (in memory) and return a Dataframe with rows where there are field

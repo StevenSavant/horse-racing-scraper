@@ -89,3 +89,21 @@ def build_race_results_query(race_res_df):
     return query, tuple(race_ids)
 
 
+def build_trainer_query(race_res_df):
+    trainer_names = set(race_res_df['trainer'])
+    params = r'%s'
+    [params := params + ', %s' for i in range(len(trainer_names) - 1)]
+    query  = 'SELECT name, id\n'
+    query += f'FROM zndlabs.trainers \n'
+    query += f'WHERE name IN ({params})'
+    return query, tuple(trainer_names)
+
+
+def build_jockey_query(race_res_df):
+    jockey_names = set(race_res_df['jockey'])
+    params = r'%s'
+    [params := params + ', %s' for i in range(len(jockey_names) - 1)]
+    query  = 'SELECT name, id\n'
+    query += f'FROM zndlabs.jockeys \n'
+    query += f'WHERE name IN ({params})'
+    return query, tuple(jockey_names)

@@ -198,4 +198,5 @@ def horse_racing_scrape(days=['all'], debug=False):
 if __name__ == "__main__":
     set_log_level("INFO")
     log_info('Starting Web Scrapper')
-    horse_racing_scrape()
+    obbb = horse_racing_scrape(['2022-07-18'])
+    print(obbb.keys())

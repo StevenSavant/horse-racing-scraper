@@ -11,20 +11,21 @@ from scrape_models import *
 
 from pathlib import Path
 
-
 DB_USERNAME = os.getenv("DB_USERNAME", None)
 DB_PASSWORD = os.getenv("DB_PASSWORD", None)
-DB_ADDRESS = os.getenv("DB_ADDRESS", None)
-DB_PORT = os.getenv("DB_PORT", None)
+DB_ADDRESS = os.getenv("DB_ADDRESS", )
+DB_PORT = os.getenv("DB_PORT", 3306)
 DB_NAME = os.getenv("DB_NAME", None)
 DB_TYPE = os.getenv("DB_TYPE", None)
-DB_INSERTS = os.getenv("DB_INSERTS", "YES")
+DB_INSERTS = os.getenv("DB_INSERTS", True)
+LOCAL_RUN = os.getenv("LOCAL_RUN", True)
 
+set_log_level("INFO")
 db_engine = get_engine(DB_NAME, DB_TYPE, DB_ADDRESS, DB_USERNAME, DB_PASSWORD, DB_PORT)
 today = date.today()
 today_label = today.strftime("%Y-%m-%d")
 
-set_log_level("INFO")
+
 CONFIG = {}
 
 # ha stands for Horse API - The Other data source
@@ -51,6 +52,61 @@ def print_missing_records(missing):
             continue
         log_warn(f'\nMISSING {x["table"].upper()}\n{x["records"]}')
 
+def query_horse_db(horse_df, scraped_race_res, db_engine):
+    query, params = build_horse_query(
+        race_res_df=scraped_race_res.get_dataframe()
+    )
+
+    log_debug(f'\n\n{query}\n{params}\n')
+
+    #Query to Get Horse IDs for results
+    try:
+        horse_df = pd.read_sql(sql=query, con=db_engine, params=params)
+        horse_df.dropna(inplace=True)
+        horse_df['name'] = horse_df['name'].str.lower()
+    except Exception as e:
+        log_error(f'Failed to read database horses: {e}')
+        exit('Aborting Sync')
+
+    return horse_df
+
+def query_trainer_db(trainers_df, scraped_race_res, db_engine):
+    query, params = build_trainer_query(
+        race_res_df=scraped_race_res.get_dataframe()
+    )
+
+    log_debug(f'\n\n{query}\n{params}\n')
+
+    #Query to Get Horse IDs for results
+    try:
+        trainers_df = pd.read_sql(sql=query, con=db_engine, params=params)
+        trainers_df.dropna(inplace=True)
+        trainers_df['name'] = trainers_df['name'].str.lower()
+    except Exception as e:
+        log_error(f'Failed to read database horses: {e}')
+        exit('Aborting Sync')
+
+    return trainers_df
+
+
+def query_jockey_db(jockey_df, scraped_race_res, db_engine):
+    query, params = build_jockey_query(
+        race_res_df=scraped_race_res.get_dataframe()
+    )
+
+    log_debug(f'\n\n{query}\n{params}\n')
+
+    #Query to Get Horse IDs for results
+    try:
+        jockey_df = pd.read_sql(sql=query, con=db_engine, params=params)
+        jockey_df.dropna(inplace=True)
+        jockey_df['name'] = jockey_df['name'].str.lower()
+    except Exception as e:
+        log_error(f'Failed to read database horses: {e}')
+        exit('Aborting Sync')
+
+    return jockey_df
+
 
 def main(update=False, inserts=False, local_run=False):
     global db_engine
@@ -58,7 +114,7 @@ def main(update=False, inserts=False, local_run=False):
     _load_database_config()
 
     # Override date for testing
-    # today_label = '2022-07-25'
+    today_label = '2022-07-10'
 
     # <----------- Run Scraper ----------- >
 
@@ -104,6 +160,8 @@ def main(update=False, inserts=False, local_run=False):
         id_field= CONFIG['RACES_TABLE']['FIELDS']['ID'],
         number_field=CONFIG['RACES_TABLE']['FIELDS']['NUMBER'],
         date_filed=CONFIG['RACES_TABLE']['FIELDS']['DATE'],
+        sts_field=CONFIG['RACES_TABLE']['FIELDS']['STATUS'],
+        dist_field=CONFIG['RACES_TABLE']['FIELDS']['DISTANCE'],
     )
     
     # Build Races Query
@@ -181,46 +239,41 @@ def main(update=False, inserts=False, local_run=False):
         pgm='pgm',
         id_field='id'
     )
-    race_res_db_records = pd.DataFrame(columns=['race_id', 'horse_id', 'pgm', 'fin_place', 'id'])
+    horses_db_records = pd.DataFrame(columns=['name', 'sire'])
+    jockey_db_records = pd.DataFrame(columns=['name', 'id'])
+    trainer_db_records = pd.DataFrame(columns=['name', 'id'])
+    race_res_db_records = pd.DataFrame(columns=['id', 'race_id'])
 
     if not scraped_race_res.get_dataframe().empty:
-        query, params = build_horse_query(
-            race_res_df=scraped_race_res.get_dataframe()
-        )
 
-        log_debug(f'\n\n{query}\n{params}\n')
-
-        #Query to Get Horse IDs for results
-        try:
-            horses_db_records = pd.read_sql(sql=query, con=db_engine, params=params)
-            horses_db_records.dropna(inplace=True)
-            horses_db_records['name'] = horses_db_records['name'].str.lower()
-        except Exception as e:
-            log_error(f'Failed to read database horses: {e}')
-            exit('Aborting Sync')
+        horses_db_records = query_horse_db(horses_db_records, scraped_race_res, db_engine)
+        jockey_db_records = query_jockey_db(jockey_db_records, scraped_race_res, db_engine)
+        trainer_db_records = query_trainer_db(trainer_db_records, scraped_race_res, db_engine)
 
         # Associate Horse Names with Database IDs
-        scraped_race_res.attach_horse_ids(horses_db_records)
+        scraped_race_res.attach_fk_ids(horses_db_records, trainer_db_records, jockey_db_records)
         scraped_race_res.normalize_fields()
 
         log_blue(f"\n{horses_db_records.sort_values(by='name')}")
         log_success(f"\n{scraped_race_res.get_dataframe()[['horse_name', 'horse_id']].sort_values(by='horse_name')}")
+        log_error(scraped_race_res._missing_horses)
 
         # Query DB for race results
-        query, params = build_race_results_query(scraped_race_res.get_dataframe())
-        log_debug(f'\n\n{query}\n{params}\n')
+        if not scraped_race_res.get_dataframe().empty:
+            query, params = build_race_results_query(scraped_race_res.get_dataframe())
+            log_debug(f'\n\n{query}\n{params}\n')
 
-        try:
-            race_res_db_records = pd.read_sql(sql=query, con=db_engine, params=params, coerce_float=False)
-        except Exception as e:
-            log_error(f'Failed to read database race results: {e}')
-            exit('Aborting Sync')
+            try:
+                race_res_db_records = pd.read_sql(sql=query, con=db_engine, params=params, coerce_float=False)
+            except Exception as e:
+                log_error(f'Failed to read database race results: {e}')
+                exit('Aborting Sync')
 
-        if not race_res_db_records.empty:
-            scraped_race_res.attach_ids(race_res_db_records)
+            if not race_res_db_records.empty:
+                scraped_race_res.attach_ids(race_res_db_records)
 
-        log_blue(f'\n{race_res_db_records}')
-        log_success(f'\n{scraped_race_res.get_dataframe()}')
+            log_blue(f'\n{race_res_db_records}')
+            log_success(f'\n{scraped_race_res.get_dataframe()}')
 
 
     # <--------- Export Report ----------- >
@@ -229,7 +282,12 @@ def main(update=False, inserts=False, local_run=False):
         "Missing Tracks" : {'table' : 'race_tracks', 'records' : scraped_tracks.get_missing()},
         "Missing Races" :  {'table' : 'races', 'records' : scraped_races.get_missing()},
         "Missing Bet Types" : {'table' : 'mapped_race_bet_types', 'records' : scraped_bet_types.get_missing()},
-        "Missing Results" : {'table' : 'race_results', 'records' : scraped_race_res.get_missing()},
+        "Missing Horses" : {'table': 'horses', 'records' : scraped_race_res.get_missing_horses()},
+        "Missing Trainers" : {'table': 'trainers', 'records' : scraped_race_res.get_missing_trainers()},
+        "Missing Jockeys" : {'table': 'jockeys', 'records' : scraped_race_res.get_missing_jockeys()},
+        "Missing Results" : {'table' : 'race_results', 'records' : scraped_race_res.get_missing()[
+            ['id', 'race_id', 'horse_id', 'jockey_id', 'trainer_id', 'pgm', 'fin_place', 'wps_win', 'wps_place', 'wps_show']
+        ]},
     }
 
     print_missing_records(export_missing_data)
@@ -259,10 +317,9 @@ def main(update=False, inserts=False, local_run=False):
             log_info('Attempting Database Update in place')
             log_warn('Feature not Ready')
 
-        log_info('Inserts:' + inserts)
-        if inserts.upper() == 'YES':
+        log_info('Inserts:' + str(inserts))
+        if inserts:
             log_blue('Inserting missing records')
-            export_missing_data['Missing Results']['records'].drop(columns='horse_name', inplace=True)
             export_missing_data['Missing Races']['records'].drop(columns='track_name', inplace=True)
 
             for k, v in export_missing_data.items():
@@ -291,4 +348,4 @@ def main(update=False, inserts=False, local_run=False):
 
 
 if __name__ == "__main__":
-    main(inserts=DB_INSERTS, local_run=False)
+    main(inserts=DB_INSERTS, local_run=LOCAL_RUN)
