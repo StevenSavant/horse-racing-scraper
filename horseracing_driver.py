@@ -18,7 +18,7 @@ DB_PORT = os.getenv("DB_PORT", 3306)
 DB_NAME = os.getenv("DB_NAME", None)
 DB_TYPE = os.getenv("DB_TYPE", None)
 DB_INSERTS = os.getenv("DB_INSERTS", True)
-LOCAL_RUN = os.getenv("LOCAL_RUN", True)
+LOCAL_RUN = os.getenv("LOCAL_RUN", False)
 
 set_log_level("INFO")
 db_engine = get_engine(DB_NAME, DB_TYPE, DB_ADDRESS, DB_USERNAME, DB_PASSWORD, DB_PORT)
@@ -114,7 +114,7 @@ def main(update=False, inserts=False, local_run=False):
     _load_database_config()
 
     # Override date for testing
-    today_label = '2022-07-10'
+    # today_label = '2022-07-27'
 
     # <----------- Run Scraper ----------- >
 
@@ -285,9 +285,8 @@ def main(update=False, inserts=False, local_run=False):
         "Missing Horses" : {'table': 'horses', 'records' : scraped_race_res.get_missing_horses()},
         "Missing Trainers" : {'table': 'trainers', 'records' : scraped_race_res.get_missing_trainers()},
         "Missing Jockeys" : {'table': 'jockeys', 'records' : scraped_race_res.get_missing_jockeys()},
-        "Missing Results" : {'table' : 'race_results', 'records' : scraped_race_res.get_missing()[
-            ['id', 'race_id', 'horse_id', 'jockey_id', 'trainer_id', 'pgm', 'fin_place', 'wps_win', 'wps_place', 'wps_show']
-        ]},
+        "Missing Results" : {'table' : 'race_results', 'records' : scraped_race_res.get_missing()
+        },
     }
 
     print_missing_records(export_missing_data)
@@ -328,7 +327,8 @@ def main(update=False, inserts=False, local_run=False):
                     log_success(f'No Missing data in table {v["table"]}!')
                     continue
 
-                if local_run:
+                # log_error(f'Local run: {local_run} : {type(local_run)}')
+                if local_run and (str(local_run).lower() == 'true'):
                     resp = get_update_confirmation(v['table'], 'Insert', v['records'])
                     if resp == False:
                         log_info(f"Skipping table insert: {v['table']}")

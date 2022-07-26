@@ -273,9 +273,9 @@ class ScrapeRaceResult(ScrapeTable):
         self._pgm = pgm
         self._fin_place = fin_place
         self._records = None
-        self._missing_horses = None
-        self._missing_trainers = None
-        self._missing_jockeys = None
+        self._missing_horses = pd.DataFrame( columns=[self._race_id, self._horse_name, self._fin_place, self._pgm, self._ids])
+        self._missing_trainers = pd.DataFrame( columns=['name', 'id'])
+        self._missing_jockeys = pd.DataFrame( columns=['name', 'id'])
         self._build_from_scrap_object(scrape_data, race_df, track_df)
         return None
 
@@ -306,7 +306,7 @@ class ScrapeRaceResult(ScrapeTable):
                     try:
                         # the `#` coloumn is scratched
                         runners = scrape_data[day][track_name][race_num]['runners']
-                        race_res = scrape_data[day][track_name][race_num]['race_results'][['Horse', 'Sire', 'Trainer', 'Jockey', '#']]
+                        race_res = scrape_data[day][track_name][race_num]['race_results'][['PP', 'Horse', 'Sire', 'Trainer', 'Jockey', '#']]
                         also_ran = scrape_data[day][track_name][race_num]['also_ran'].to_dict()
 
                         for k in sorted(also_ran['Also Rans'].keys()):
@@ -316,7 +316,8 @@ class ScrapeRaceResult(ScrapeTable):
                                 if name == '':
                                     break
                             
-                                horse_res = scrape_data[day][track_name][race_num]['race_results'].query(f'Horse == "{name}"')
+                                # horse_res = scrape_data[day][track_name][race_num]['race_results'].query(f'Horse == "{name}"')
+                                horse_res = race_res.query(f'Horse == "{name}"')
                                 runners = runners.append({
                                         'Runner' : name,
                                         'Horse Number' : horse_res.iloc[0]['PP'],
@@ -333,8 +334,10 @@ class ScrapeRaceResult(ScrapeTable):
 
 
                         runners = runners.rename({'Runner':'horse_name', 'Horse Number' : 'pgm', 'Win' : 'wps_win', 'Place' : 'wps_place', 'Show' : 'wps_show'}, axis='columns')
-                        race_res = race_res.rename({'Horse':'horse_name', 'Sire' : 'sire', 'Trainer' : 'trainer', 'Jockey' : 'jockey', '#' : 'scratched'}, axis='columns')
-                        runners =runners.merge(race_res, on='horse_name')
+                        race_res = race_res.rename({'Horse':'horse_name', 'PP': 'pgm', 'Sire' : 'sire', 'Trainer' : 'trainer', 'Jockey' : 'jockey', '#' : 'scratched'}, axis='columns')
+                        runners = runners.merge(race_res[['horse_name', 'sire', 'trainer', 'jockey', 'scratched']], on='horse_name')
+                        runners = pd.concat([runners, race_res[race_res['scratched'] == True]], ignore_index=True)
+                        runners = runners.where(pd.notnull(runners), '-')
 
                         runners['pgm'] = runners['pgm'].astype(int)
                         runners['pgm'] = runners['pgm'].astype(str)
@@ -346,6 +349,8 @@ class ScrapeRaceResult(ScrapeTable):
                         runners['horse_id'] = ''
                         runners['jockey_id'] = ''
                         runners['trainer_id'] = ''
+                        scratchmap = {'' : 0, True: 1}
+                        runners['scratched'] = runners['scratched'].map(scratchmap)
                         df = pd.concat([df, runners], ignore_index=True)
                     except Exception as e:
                         continue
@@ -466,6 +471,15 @@ class ScrapeRaceResult(ScrapeTable):
         self._records = self._records[self._records.horse_id != 0]
         self._records = self._records[self._records.trainer_id != 0]
         self._records = self._records[self._records.jockey_id != 0]
+
+    def get_missing(self):
+        missing = self._records.query(f'id == ""')
+        if not missing.empty:
+            return missing[
+                ['id', 'race_id', 'horse_id', 'jockey_id', 'trainer_id', 'pgm', 'fin_place', 'wps_win', 'wps_place', 'wps_show', 'scratched']
+            ]
+        return missing
+
 
     def merge_records(self, db_records):
         """Merges this scrape table with the coresponding database records (in memory) and return a Dataframe with rows where there are field
