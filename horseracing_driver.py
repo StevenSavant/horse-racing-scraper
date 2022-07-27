@@ -114,7 +114,7 @@ def main(update=False, inserts=False, local_run=False):
     _load_database_config()
 
     # Override date for testing
-    # today_label = '2022-07-27'
+    # today_label = '2022-07-15'
 
     # <----------- Run Scraper ----------- >
 
@@ -192,6 +192,38 @@ def main(update=False, inserts=False, local_run=False):
     log_blue(f'\n{races_db_records}\n')
     log_success(f'\n{scraped_races.get_dataframe()[["race_date", "id", "race_sex", "purse_usd_size"]]}\n')
 
+#    <----------- Wager Types ----------- >
+
+    scraped_wager_types = ScrapeExoticBets(
+        race_df=scraped_races.get_dataframe(),
+        track_df=scraped_tracks.get_dataframe(),
+        scrape_data = scrape_data,
+        race_id='fk_race_id',
+        type_field='val',
+        id_field='id'
+    )
+    bet_wager_db_records = pd.DataFrame(columns=['fk_race_id', 'val', 'id'])
+
+    if not scraped_wager_types.get_dataframe().empty:
+        # Build Bet Types Query
+        query, params = build_wager_query(
+            wager_df=scraped_wager_types.get_dataframe()
+        )
+
+        log_debug(f'\n\n{query}\n{params}\n')
+
+        try:
+            bet_wager_db_records = pd.read_sql(sql=query, con=db_engine, params=params)
+        except Exception as e:
+            log_error(f'Failed to read database bet types: {e}')
+            exit('Aborting Sync')
+
+        bet_wager_db_records.reset_index(inplace=True)
+        if not bet_wager_db_records.empty:
+            scraped_wager_types.attach_ids(bet_wager_db_records)
+
+        log_blue(f"\n{bet_wager_db_records}\n")
+        log_success(f"\n{scraped_wager_types.get_dataframe()}\n")
 
 #    <----------- Bet Type ----------- >
 
@@ -256,7 +288,6 @@ def main(update=False, inserts=False, local_run=False):
 
         log_blue(f"\n{horses_db_records.sort_values(by='name')}")
         log_success(f"\n{scraped_race_res.get_dataframe()[['horse_name', 'horse_id']].sort_values(by='horse_name')}")
-        log_error(scraped_race_res._missing_horses)
 
         # Query DB for race results
         if not scraped_race_res.get_dataframe().empty:
@@ -282,6 +313,7 @@ def main(update=False, inserts=False, local_run=False):
         "Missing Tracks" : {'table' : 'race_tracks', 'records' : scraped_tracks.get_missing()},
         "Missing Races" :  {'table' : 'races', 'records' : scraped_races.get_missing()},
         "Missing Bet Types" : {'table' : 'mapped_race_bet_types', 'records' : scraped_bet_types.get_missing()},
+        "Missing Wager Types" : {'table' : 'res_wps_wager_type', 'records' : scraped_wager_types.get_missing()},
         "Missing Horses" : {'table': 'horses', 'records' : scraped_race_res.get_missing_horses()},
         "Missing Trainers" : {'table': 'trainers', 'records' : scraped_race_res.get_missing_trainers()},
         "Missing Jockeys" : {'table': 'jockeys', 'records' : scraped_race_res.get_missing_jockeys()},

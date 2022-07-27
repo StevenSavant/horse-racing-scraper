@@ -251,7 +251,8 @@ class ScrapeBetTypes(ScrapeTable):
                 return u_row
             return u_row
         except Exception as e:
-            log_error(f'failed to match bet type for pair: {y}, {z} : {e}')
+            log_error(f'failed to match bet type for pair: {y}, {z} : error: {e}')
+            return u_row
 
 
     def attach_ids(self, database_df):
@@ -510,3 +511,66 @@ class ScrapeRaceResult(ScrapeTable):
         merged.drop_duplicates(subset=sync_cols[1:], keep=False, inplace=True)
 
         return merged
+
+
+class ScrapeExoticBets(ScrapeTable):
+    
+    def __init__(self,  scrape_data=None, race_df=None, track_df=None, race_id='fk_race_id', type_field='val', id_field='id'):
+        self._ids = id_field
+        self._race_id = race_id
+        self._type_field = type_field
+        self._records = None
+        self._build_from_scrap_object(scrape_data, race_df, track_df)
+        return None
+
+    def _build_from_scrap_object(self, scrape_data, race_df, track_df):
+        """Parse the Horseracingnation output object to build database mapped dataframe with ids initialized to empty strings
+
+        :param scrape_data: output of horseracingnation scraper
+        :type scrape_data: dict
+        """
+        df = pd.DataFrame( columns=[self._ids, self._race_id, self._type_field])
+        for day in scrape_data:
+            for track_name in scrape_data[day]:
+                for race_num in scrape_data[day][track_name]:
+
+                    if race_num == 'id':
+                        continue
+
+                    race_row = race_df.query(f"fk_track_id == {track_df.loc[track_name]['id']} & race_num == '{race_num}'", engine='python')
+
+                    if race_row.empty or not (race_row.iloc[0]['id']):
+                        continue
+
+                    try:
+                        wager_types = scrape_data[day][track_name][race_num]['bet_type']
+                        wager_types = wager_types.rename({'Bet Types': self._type_field, '#': 'col_idx'}, axis='columns')
+                        wager_types['fk_race_id'] = race_row.iloc[0]['id']
+                        wager_types['id'] = ''
+                        df = pd.concat([df, wager_types[['id', 'fk_race_id', 'val', 'col_idx']]], ignore_index=True)
+                    except Exception as e:
+                        log_debug(e)
+                        continue
+
+        self._records = df
+    
+    def _append_wager_ids(self, row, db_records):
+        u_row = row.copy()
+        y, z = u_row['fk_race_id'], u_row['val']
+        try:
+            result =db_records.query(f"fk_race_id == {y} & val == '{z}'", engine='python')
+            if not result.empty:
+                u_row['id'] = result.iloc[0]['id']
+                return u_row
+            return u_row
+        except Exception as e:
+            log_error(f'failed to match wager type for pair: race_id : {y}, wager: {z} : error: {e}')
+            return u_row
+        
+    def attach_ids(self, db_records):
+        """Uses database table to find associated records and appends thier id's if they exist
+
+        :param database_df: database dataframe as retured from the pd.read_sql()
+        :type database_df: pandads.Dataframe
+        """
+        self._records = self._records.apply(self._append_wager_ids, axis=1, db_records=db_records)
