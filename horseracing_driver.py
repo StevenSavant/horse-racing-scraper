@@ -114,15 +114,15 @@ def main(update=False, inserts=False, local_run=False):
     _load_database_config()
 
     # Override date for testing
-    # today_label = '2022-07-15'
+    # today_label = '2022-07-27'
 
     # <----------- Run Scraper ----------- >
 
     scrape_data = horse_racing_scrape([today_label], debug=True)
     log_info(f'Scrapping complete: {list(scrape_data.keys())}')
 
-    # <----------- Collect Tracks ----------- >
 
+    # <----------- Collect Tracks ----------- >
     scraped_tracks = ScrapeTracks(
         scrape_data = scrape_data, 
         id_field    = CONFIG['TRACK_TABLE']['FIELDS']['ID'],
@@ -269,6 +269,7 @@ def main(update=False, inserts=False, local_run=False):
         race_id='race_id',
         fin_place='fin_place',
         pgm='pgm',
+        ml='Morning_Line',
         id_field='id'
     )
     horses_db_records = pd.DataFrame(columns=['name', 'sire'])

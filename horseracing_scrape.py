@@ -27,7 +27,7 @@ def splice_column(record, element=0):
 
 
 def trasnform_dataframe(record):
-        record['ML'] = "("+str(record['ML']).replace("nan","") + ")"
+        # record['ML'] = "("+str(record['ML']).replace("nan","") + ")"
         record['Horse'] = record['Horse / Sire'].apply(splice_column, element=0)
         record['Sire'] = record['Horse / Sire'].apply(splice_column, element=1)
         record['Trainer'] = record['Trainer / Jockey'].apply(splice_column, element=0)

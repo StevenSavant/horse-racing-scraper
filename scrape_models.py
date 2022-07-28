@@ -267,12 +267,13 @@ class ScrapeBetTypes(ScrapeTable):
 
 class ScrapeRaceResult(ScrapeTable):
     def __init__(self,  scrape_data=None, race_df=None, track_df=None, 
-                        race_id=None, pgm=None, fin_place=None, id_field='id'):
+                        race_id=None, pgm=None, ml=None, fin_place=None, id_field='id'):
         self._ids = id_field
         self._race_id = race_id
         self._horse_name = 'horse_name'     # will add horse name to this dataframe
         self._pgm = pgm
         self._fin_place = fin_place
+        self._ml = ml
         self._records = None
         self._missing_horses = pd.DataFrame( columns=[self._race_id, self._horse_name, self._fin_place, self._pgm, self._ids])
         self._missing_trainers = pd.DataFrame( columns=['name', 'id'])
@@ -307,7 +308,7 @@ class ScrapeRaceResult(ScrapeTable):
                     try:
                         # the `#` coloumn is scratched
                         runners = scrape_data[day][track_name][race_num]['runners']
-                        race_res = scrape_data[day][track_name][race_num]['race_results'][['PP', 'Horse', 'Sire', 'Trainer', 'Jockey', '#']]
+                        race_res = scrape_data[day][track_name][race_num]['race_results'][['PP', 'Horse', 'Sire', 'Trainer', 'Jockey', 'ML', '#']]
                         also_ran = scrape_data[day][track_name][race_num]['also_ran'].to_dict()
 
                         for k in sorted(also_ran['Also Rans'].keys()):
@@ -334,9 +335,15 @@ class ScrapeRaceResult(ScrapeTable):
                                 continue
 
 
-                        runners = runners.rename({'Runner':'horse_name', 'Horse Number' : 'pgm', 'Win' : 'wps_win', 'Place' : 'wps_place', 'Show' : 'wps_show'}, axis='columns')
-                        race_res = race_res.rename({'Horse':'horse_name', 'PP': 'pgm', 'Sire' : 'sire', 'Trainer' : 'trainer', 'Jockey' : 'jockey', '#' : 'scratched'}, axis='columns')
-                        runners = runners.merge(race_res[['horse_name', 'sire', 'trainer', 'jockey', 'scratched']], on='horse_name')
+                        runners = runners.rename(
+                            {'Runner':'horse_name', 'Horse Number' : 'pgm', 'Win' : 'wps_win', 'Place' : 'wps_place', 'Show' : 'wps_show'},
+                            axis='columns'
+                        )
+                        race_res = race_res.rename(
+                            {'Horse':'horse_name', 'PP': 'pgm', 'Sire' : 'sire', 'Trainer' : 'trainer', 'Jockey' : 'jockey', '#' : 'scratched', 'ML': self._ml},
+                            axis='columns'
+                        )
+                        runners = runners.merge(race_res[['horse_name', 'sire', 'trainer', 'jockey', 'scratched', self._ml]], on='horse_name')
                         runners = pd.concat([runners, race_res[race_res['scratched'] == True]], ignore_index=True)
                         runners = runners.where(pd.notnull(runners), '-')
 
@@ -477,7 +484,7 @@ class ScrapeRaceResult(ScrapeTable):
         missing = self._records.query(f'id == ""')
         if not missing.empty:
             return missing[
-                ['id', 'race_id', 'horse_id', 'jockey_id', 'trainer_id', 'pgm', 'fin_place', 'wps_win', 'wps_place', 'wps_show', 'scratched']
+                ['id', 'race_id', 'horse_id', 'jockey_id', 'trainer_id', 'pgm', 'fin_place', 'wps_win', 'wps_place', 'wps_show', 'scratched', 'Morning_Line']
             ]
         return missing
 
