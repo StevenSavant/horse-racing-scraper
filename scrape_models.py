@@ -544,6 +544,10 @@ class ScrapeExoticBets(ScrapeTable):
                     if race_num == 'id':
                         continue
 
+                    if track_df.loc[track_name]['id'] == '':
+                        continue
+
+
                     race_row = race_df.query(f"fk_track_id == {track_df.loc[track_name]['id']} & race_num == '{race_num}'", engine='python')
 
                     if race_row.empty or not (race_row.iloc[0]['id']):
