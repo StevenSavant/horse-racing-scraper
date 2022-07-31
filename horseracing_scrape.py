@@ -174,11 +174,6 @@ def horse_racing_scrape(days=['all'], debug=False):
                 df = pd.concat([df,pool_df],axis=1, ignore_index=True)
                 main_df = main_df.append(df, ignore_index=True)
 
-                # # Grab SampleSet for Testing
-                # if debug:
-                #     if len(table_dfs[datekey].keys()) >= 3:
-                #         return table_dfs
-
         log_debug('Trimming Data Columns')
         try:
             main_df.columns = ['Race Track','Race Number','Race Time','Length','Surface','Race Class','Sex','Age','Purse','Bet Types','#','PP','Horse','Sire','Trainer','Jockey','Morning Line ML','Scratched','Runner Name','Horse Number','Win','Place','Show','Runner Name','Pool','Finish',	'$2 Payout','Total Pool','Fractions and Final time']
@@ -188,7 +183,7 @@ def horse_racing_scrape(days=['all'], debug=False):
                 main_df.columns = ['Race Track','Race Number','Race Time','Length','Surface','Race Class','Sex','Age','Purse','Bet Types','#','PP','Horse','Sire','Trainer','Jockey','Morning Line ML','Scratched']
             except:
                 log_error('Failed 2nd attempt Column Parse, Data is lost')
-                return main_df
+                continue
 
         main_df.fillna("",inplace=True)
         main_df.to_csv(link.split("/")[-1]+"-V3.csv",index=False)

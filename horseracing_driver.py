@@ -1,16 +1,12 @@
 import os
 import json
 import pandas as pd
-from sqlalchemy import true
 from dbhandler import *
 from datetime import date
 from scrape_transform import *
 from horseracing_scrape import horse_racing_scrape
 from utils import log_blue, log_info, log_warn, set_log_level, log_debug, log_error, log_success
 from scrape_models import *
-
-
-from pathlib import Path
 
 DB_USERNAME = os.getenv("DB_USERNAME", None)
 DB_PASSWORD = os.getenv("DB_PASSWORD", None)
@@ -411,6 +407,7 @@ def main(update=False, inserts=False, local_run=False):
     else:
         log_success('Nothing to update! Database is Synced!')
     log_success('Sync Run Complete!')
+    print('Sync Complete')
 
 
 if __name__ == "__main__":
