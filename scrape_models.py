@@ -93,7 +93,7 @@ class ScrapeRaces(ScrapeTable):
         :param scrape_data: output of horseracingnation scraper
         :type scrape_data: dict
         """
-        df = pd.DataFrame( columns=[self._ids, self._number])
+        df = pd.DataFrame( columns=[self._ids, self._number, 'race_date'])
         for day in scrape_data:
             for track_name in scrape_data[day]:
                 for race_num in scrape_data[day][track_name]:
@@ -117,6 +117,21 @@ class ScrapeRaces(ScrapeTable):
                         record['race_class'] = scrape_data[day][track_name][race_num]['ap']['Race Class']
                         record['race_sex'] = scrape_data[day][track_name][race_num]['ap']['Sex']
                         record['purse_usd_size'] = scrape_data[day][track_name][race_num]['ap']['Purse']
+                        record['fractional_times'] = ''
+                        record['race_status'] = ''
+                        
+                        try:
+                            frac_time = scrape_data[day][track_name][race_num]['pool'].at[0, 'Fraction time'].split(',')[-1]
+                            frac_time = str.strip(frac_time)
+                            
+                            if frac_time[0] == ':':
+                                frac_time = '0' + frac_time
+                            
+                            record['fractional_times'] = frac_time
+                            record['race_status'] = 'FINAL'
+                        except:
+                            pass
+
                         df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
                     except Exception as e:
                         log_info(f'Error Reading Track/Race: {track_name}/{race_num} with error: {e}')
@@ -308,6 +323,10 @@ class ScrapeRaceResult(ScrapeTable):
                     try:
                         # the `#` coloumn is scratched
                         runners = scrape_data[day][track_name][race_num]['runners']
+
+                        if not runners: # There are no race results
+                            continue
+
                         race_res = scrape_data[day][track_name][race_num]['race_results'][['PP', 'Horse', 'Sire', 'Trainer', 'Jockey', 'ML', '#']]
                         also_ran = scrape_data[day][track_name][race_num]['also_ran'].to_dict()
 

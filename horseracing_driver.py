@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+from sqlalchemy import true
 from dbhandler import *
 from datetime import date
 from scrape_transform import *
@@ -17,6 +18,7 @@ DB_ADDRESS = os.getenv("DB_ADDRESS", )
 DB_PORT = os.getenv("DB_PORT", 3306)
 DB_NAME = os.getenv("DB_NAME", None)
 DB_TYPE = os.getenv("DB_TYPE", None)
+DB_UPDATES = os.getenv("DB_UPDATES", True)
 DB_INSERTS = os.getenv("DB_INSERTS", True)
 LOCAL_RUN = os.getenv("LOCAL_RUN", False)
 
@@ -107,6 +109,23 @@ def query_jockey_db(jockey_df, scraped_race_res, db_engine):
 
     return jockey_df
 
+def compare_to_db(row, db_records):
+    res = db_records.query(f'id == {row["id"]}')
+    if not res.empty:
+        if (not res.iloc[0]['fractional_times']) or (res.iloc[0]['fractional_times'] == ''):
+            return row
+
+
+
+def get_fractional_time_updates(scrp_races, database):
+    if not database.query('fractional_times == ""').empty:
+        result = scrp_races.apply(compare_to_db, axis=1, db_records=database)
+        result = result.dropna()
+        return result
+    else:
+        log_warn('All Database records have fractinal times')
+    return pd.DataFrame()
+
 
 def main(update=False, inserts=False, local_run=False):
     global db_engine
@@ -114,7 +133,7 @@ def main(update=False, inserts=False, local_run=False):
     _load_database_config()
 
     # Override date for testing
-    # today_label = '2022-07-27'
+    # today_label = '2022-07-18'
 
     # <----------- Run Scraper ----------- >
 
@@ -346,8 +365,22 @@ def main(update=False, inserts=False, local_run=False):
             [export_missing_data[k]['records'].to_excel(writer, sheet_name=k) for k, v in export_missing_data.items() if not export_missing_data[k]['records'].empty]
 
         if update:
-            log_info('Attempting Database Update in place')
-            log_warn('Feature not Ready')
+            log_info('checking fractional times updates')
+            scrp_times = scraped_races.get_existing().query('fractional_times != ""')
+            if not scrp_times.empty:
+                neeeds_update = get_fractional_time_updates(scrp_times, races_db_records)
+                if not neeeds_update.empty:
+                    updates = build_fractional_time_update(neeeds_update)
+                    log_debug(updates)
+
+                    with db_engine.begin() as conn:
+                        resp = conn.execute(updates)
+                        log_success(f'Updated {resp}')
+                else:
+                    log_success('No fraciontal times need be updated')
+            else:
+                log_debug('No Fractional times found in HRNation')
+
 
         log_info('Inserts:' + str(inserts))
         if inserts:
@@ -381,4 +414,4 @@ def main(update=False, inserts=False, local_run=False):
 
 
 if __name__ == "__main__":
-    main(inserts=DB_INSERTS, local_run=LOCAL_RUN)
+    main(inserts=DB_INSERTS, update=DB_UPDATES, local_run=LOCAL_RUN)

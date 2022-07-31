@@ -11,13 +11,13 @@ def get_engine(db_name, db_type, db_address, username, password, port=3306):
     :param db_name: database name
     :type db_name: str
     :param db_type: database language
-    :type db_type: _type_
+    :type db_type: str
     :param db_address: connection address (ip address or 'localhost' for dev)
-    :type db_address: _type_
+    :type db_address: str
     :param username: database username
-    :type username: _type_
+    :type username: str
     :param password: db password
-    :type password: _type_
+    :type password: str
     :param port: port, defaults to 3306
     :type port: int, optional
     :return: database engine
@@ -117,3 +117,26 @@ def build_wager_query(wager_df):
     query += f'FROM zndlabs.res_wps_wager_type \n'
     query += f'WHERE fk_race_id IN ({params})'
     return query, tuple(race_ids)
+
+
+"""
+    UPDATE races
+    SET fractional_times = 
+    (case when id = 393701 then '1:00.53'
+	when id = 393522 then '2:30.53'
+	end),
+    race_status = 'FINAL'
+    WHERE id in (393701, 393522)
+"""
+
+def build_fractional_time_update(races_df):
+    update_pairs = tuple(races_df[['id', 'fractional_times']].values.tolist())
+    params = ''
+    [params := params + f"when id = {x[0]} then '{x[1]}'\n" for x in update_pairs]
+    query = 'UPDATE races\n'
+    query += 'SET fractional_times = (CASE\n'
+    query += params
+    query += 'end),\n'
+    query += "race_status = 'FINAL'\n"
+    query += f'WHERE id IN {tuple(races_df["id"].values)}'
+    return query

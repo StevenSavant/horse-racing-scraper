@@ -148,7 +148,7 @@ def horse_racing_scrape(days=['all'], debug=False):
                     pool_df = tables[2]
                     for i in range(len(pool_df)):
                         pool_df.at[i,'Finish'] = "( "+str(pool_df.at[i,'Finish']).replace("nan","")+ ")"
-                    race_fraction = race.xpath(".//div[contains(@class,'race-fractions')]/text()")[0].replace("Fractions and final time: :","").strip()
+                    race_fraction = race.xpath(".//div[contains(@class,'race-fractions')]/text()")[0].replace("Fractions and final time:","").strip()
                     pool_df.at[0,'Fraction time'] = race_fraction
                 except:
                     pool_df = None
