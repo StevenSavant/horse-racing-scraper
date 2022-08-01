@@ -10,7 +10,7 @@ from scrape_models import *
 
 DB_USERNAME = os.getenv("DB_USERNAME", None)
 DB_PASSWORD = os.getenv("DB_PASSWORD", None)
-DB_ADDRESS = os.getenv("DB_ADDRESS", )
+DB_ADDRESS = os.getenv("DB_ADDRESS", None)
 DB_PORT = os.getenv("DB_PORT", 3306)
 DB_NAME = os.getenv("DB_NAME", None)
 DB_TYPE = os.getenv("DB_TYPE", None)
@@ -50,6 +50,7 @@ def print_missing_records(missing):
             continue
         log_warn(f'\nMISSING {x["table"].upper()}\n{x["records"]}')
 
+
 def query_horse_db(horse_df, scraped_race_res, db_engine):
     query, params = build_horse_query(
         race_res_df=scraped_race_res.get_dataframe()
@@ -67,6 +68,7 @@ def query_horse_db(horse_df, scraped_race_res, db_engine):
         exit('Aborting Sync')
 
     return horse_df
+
 
 def query_trainer_db(trainers_df, scraped_race_res, db_engine):
     query, params = build_trainer_query(
@@ -118,7 +120,7 @@ def compare_to_db(row, db_records):
 
 def get_fractional_time_updates(scrp_races, database):
     scrp_races['needs_update'] = False
-    if not database.query('fractional_times == ""').empty:
+    if (not database.query('fractional_times == ""').empty) or (not database.query('fractional_times != fractional_times').empty):
         result = scrp_races.apply(compare_to_db, axis=1, db_records=database)
         result = result.dropna()
         return result.query('needs_update == True')
@@ -133,7 +135,7 @@ def main(update=False, inserts=False, local_run=False):
     _load_database_config()
 
     # Override date for testing
-    # today_label = '2022-07-31'
+    # today_label = '2022-07-30'
 
     # <----------- Run Scraper ----------- >
 
