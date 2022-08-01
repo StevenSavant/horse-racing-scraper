@@ -138,5 +138,8 @@ def build_fractional_time_update(races_df):
     query += params
     query += 'end),\n'
     query += "race_status = 'FINAL'\n"
-    query += f'WHERE id IN {tuple(races_df["id"].values)}'
+    if len(races_df["id"].values) == 1:
+        query += f'WHERE id IN ({races_df["id"].values.tolist()[0]})'
+    else:
+        query += f'WHERE id IN {tuple(races_df["id"].values)}'
     return query

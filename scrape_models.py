@@ -182,7 +182,7 @@ class ScrapeRaces(ScrapeTable):
         :return: Resulting Dataframe from comparison
         :rtype: pandas.Dataframe
         """
-        sync_cols = ['source', 'id', 'fk_track_id', 'race_num', 'race_class', 'race_sex', 'off_at_time', 'race_track_surf', 'purse_usd_size']
+        sync_cols = ['source', 'id', 'fk_track_id', 'race_num', 'race_class', 'race_sex', 'off_at_time', 'race_track_surf', 'purse_usd_size', 'fractional_times']
         merged = self._records.copy()
         merged['source'] = 'HRNation'
         db_records['source'] = 'zndlabsDB'

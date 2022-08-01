@@ -133,7 +133,7 @@ def main(update=False, inserts=False, local_run=False):
     _load_database_config()
 
     # Override date for testing
-    today_label = '2022-07-31'
+    # today_label = '2022-07-31'
 
     # <----------- Run Scraper ----------- >
 
