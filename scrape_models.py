@@ -195,6 +195,9 @@ class ScrapeRaces(ScrapeTable):
         
         merged = merged[merged.groupby('id').id.transform('count') > 1]
 
+        if merged.empty:
+            return merged
+
         # At random times... the Race Number may not be a race number
         merged = merged[merged.id.apply(lambda x: str(x).isnumeric())]
         merged = merged[merged.race_num.apply(lambda x: str(x).isnumeric())]
