@@ -118,7 +118,7 @@ class ScrapeRaces(ScrapeTable):
                         record['race_sex'] = scrape_data[day][track_name][race_num]['ap']['Sex']
                         record['purse_usd_size'] = scrape_data[day][track_name][race_num]['ap']['Purse']
                         record['fractional_times'] = ''
-                        record['race_status'] = ''
+                        record['race_status'] = 'OPEN'
                         
                         try:
                             frac_time = scrape_data[day][track_name][race_num]['pool'].at[0, 'Fraction time'].split(',')[-1]
