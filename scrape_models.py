@@ -106,12 +106,16 @@ class ScrapeRaces(ScrapeTable):
                         break
 
                     try:
+                        est_time = scrape_data[day][track_name][race_num]['ap']['Race Time']
+                        race_datetime = datetime.strptime(day, "%Y-%m-%d")
+
                         record = {x : '' for x in df.columns}
                         record['race_date'] = day
                         record['track_name'] = track_name                           # Adds Track name for convenience
                         record['fk_track_id'] = track_id
                         record['race_num'] = race_num
-                        record['off_at_time'] = scrape_data[day][track_name][race_num]['ap']['Race Time']
+                        record['off_at_time'] = est_time
+                        record['dt_est_start'] = add_to_datetime(race_datetime, est_time)
                         record['race_track_dist'] = scrape_data[day][track_name][race_num]['ap']['Length']
                         record['race_track_surf'] = scrape_data[day][track_name][race_num]['ap']['Surface']
                         record['race_class'] = scrape_data[day][track_name][race_num]['ap']['Race Class']

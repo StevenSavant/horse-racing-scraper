@@ -3,6 +3,8 @@ import os
 import sys
 import inspect
 import requests
+from datetime import datetime
+from datetime import timedelta, time
 
 _session = None
 
@@ -20,6 +22,19 @@ class bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+def add_to_datetime(today_date, est_hour_minute):
+    x, y = est_hour_minute[:-3].split(':')
+    x, y, = int(x), int(y)
+
+    if ('AM' in est_hour_minute) and (x == 12):
+        x = 0
+
+    elif ('PM' in est_hour_minute) and (x < 12):
+        x += 12
+
+    est_time = time(hour=x, minute=y)
+    return datetime.combine(today_date, est_time)
 
 
 def _create_session():
