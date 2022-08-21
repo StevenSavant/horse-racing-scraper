@@ -220,10 +220,10 @@ def main(update=False, inserts=False, local_run=False):
         track_df=scraped_tracks.get_dataframe(),
         scrape_data = scrape_data,
         race_id='fk_race_id',
-        type_field='val',
+        type_field='bet_type',
         id_field='id'
     )
-    bet_wager_db_records = pd.DataFrame(columns=['fk_race_id', 'val', 'id'])
+    bet_wager_db_records = pd.DataFrame(columns=['fk_race_id', 'bet_type', 'id'])
 
     if not scraped_wager_types.get_dataframe().empty:
         # Build Bet Types Query
