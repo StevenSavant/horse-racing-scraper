@@ -548,7 +548,7 @@ class ScrapeRaceResult(ScrapeTable):
 
 class ScrapeExoticBets(ScrapeTable):
     
-    def __init__(self,  scrape_data=None, race_df=None, track_df=None, race_id='fk_race_id', type_field='val', id_field='id'):
+    def __init__(self,  scrape_data=None, race_df=None, track_df=None, race_id='fk_race_id', type_field='bet_type', id_field='id'):
         self._ids = id_field
         self._race_id = race_id
         self._type_field = type_field
