@@ -391,6 +391,9 @@ def main(update=False, inserts=False, local_run=False):
 
             for k, v in export_missing_data.items():
 
+                if k == "Missing Tracks":
+                    continue
+
                 if v['records'].empty:
                     log_success(f'No Missing data in table {v["table"]}!')
                     continue

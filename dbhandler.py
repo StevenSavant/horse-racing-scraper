@@ -113,7 +113,7 @@ def build_wager_query(wager_df):
     race_ids = set(wager_df['fk_race_id'])
     params = r'%s'
     [params := params + ', %s' for i in range(len(race_ids) - 1)]
-    query  = 'SELECT id, fk_race_id, val\n'
+    query  = 'SELECT id, fk_race_id, bet_type\n'
     query += f'FROM zndlabs.res_wps_wager_type \n'
     query += f'WHERE fk_race_id IN ({params})'
     return query, tuple(race_ids)
