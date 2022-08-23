@@ -221,7 +221,8 @@ def main():
             log_error(f'track missing from Databse: {track}')
             continue
 
-        if 'Camarero' not in track:
+        if 'Camarero' in track:
+            log_debug('skipping Camarero, page data in inconsistent')
             continue
 
         t_name = track
