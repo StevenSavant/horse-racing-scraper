@@ -1,15 +1,11 @@
 import os
-import json
-import pandas as pd
-from dbhandler import *
-from scrape_transform import *
+import sys
 from horseracing_scrape import horse_racing_scrape
 from utils import log_blue, log_info, log_warn, set_log_level, log_debug, log_error, log_success
-from scrape_models import *
 
 from horseracingnation import HorseRacingNation
 from Models import *
-from datetime import date, datetime
+from datetime import date
 from db_utils import *
 from sqlalchemy.orm import sessionmaker
 
@@ -22,13 +18,12 @@ DB_NAME = os.getenv("DB_NAME", None)
 DB_TYPE = os.getenv("DB_TYPE", None)
 DB_UPDATES = os.getenv("DB_UPDATES", True)
 DB_INSERTS = os.getenv("DB_INSERTS", True)
-LOCAL_RUN = os.getenv("LOCAL_RUN", False)
+DEBUG = os.getenv("DEBUG", True)
 
 today = date.today()
 today_label = today.strftime("%Y-%m-%d")
-run_env = 'dev'
 Sessions = None
-set_log_level('INFO')
+set_log_level('DEBUG')
 
 try:
     db_engine = get_engine(DB_NAME, DB_TYPE, DB_ADDRESS, DB_USERNAME, DB_PASSWORD, DB_PORT)
@@ -121,9 +116,9 @@ def sync_track_races_today(hrn, track_name, track_id, race_count):
                 db_race_results = get_db_race_results(db_race.id, session=session)
 
                 log_debug(f'Checking Bet Types for {db_race.id}')
-                if len(hrn_race['betTypes']) > len(race_bet_types):
+                if len(hrn_race['betTypesAvailable']) > len(race_bet_types):
                     log_debug('Bet Types out of sync')
-                    for x in hrn_race['betTypes']:
+                    for x in hrn_race['betTypesAvailable']:
                         if x not in race_bet_types:
                             new_mapping = add_new_bet_type_mapping(db_race.id, x)
                             session.add(new_mapping)
@@ -199,8 +194,8 @@ def sync_track_races_today(hrn, track_name, track_id, race_count):
     return hrn_race_cache
 
 def main():
-    log_warn(f"RUNNING IN {run_env} MODE")
-    scrape_data = horse_racing_scrape([today_label], debug=True)
+    log_warn(f"RUNNING IN DEBUG: {DEBUG}")
+    scrape_data = horse_racing_scrape([today_label], debug=DEBUG)
     log_info(f'Scrapping complete: {list(scrape_data.keys())}')
 
     hrn = HorseRacingNation(today_label, scrape_data[today_label])
@@ -246,6 +241,5 @@ def test_main():
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'Prod' :
-        run_env = 'prod'
-    run_env = 'prod'
+        DEBUG = False
     main()

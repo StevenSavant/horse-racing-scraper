@@ -1,6 +1,8 @@
 
 from glob import escape
+from operator import mul
 from utils import *
+import re
 
 class HorseRacingNation():
     """Wrapper for Horse Racing Nation Data Object
@@ -9,6 +11,9 @@ class HorseRacingNation():
     def __init__(self, race_date, scrape_data):
         self._race_date = race_date
         self._scrape_data = scrape_data
+        self._known_bet_types = [
+            'EXACTA','TRIFECTA','SUPERFECTA','QUINELLA','DAILY DOUBLE','CONSOLATION DOUBLE','TRIACTOR','Z-5 SUPER HI-5',
+            'SUPER HIGH FIVE JACKPOT','GRAND SLAM','SUPER HIGH FIVE','X-5 SUPER HIGH FIVE','EXACTOR','PERFECTA']
         return None
 
     def get_tracks(self):
@@ -68,6 +73,26 @@ class HorseRacingNation():
             resp.append(x)
         return resp
 
+    def _build_bet_type_aval_list(self, wager_types_extracted):
+        wagers_split = wager_types_extracted['Bet Types'].to_list()
+        wagers = []
+
+        for w in wagers_split:
+            if w.upper() in self._known_bet_types:
+                wagers.append(w.upper())
+            elif 'DOUBLE' in w.upper():
+                wagers.append('DAILY DOUBLE')
+            elif '(' in w.upper():
+                multi_race_bets = re.split(r'\(([^\)]+)\)', w.upper())
+                for seg in multi_race_bets:
+                    if 'RACES' not in seg and seg != '':
+                        wagers.append(seg.strip())
+            else:
+                wagers.append(w.upper().strip())
+
+        return wagers
+
+
     def get_race(self, track_name, race_number):
         race = {}
         race_data = self._scrape_data[track_name][race_number]
@@ -83,14 +108,15 @@ class HorseRacingNation():
         race['raceClass'] = race_data['ap']['Race Class']
         race['surface'] = race_data['ap']['Surface']
         race['purse'] = race_data['ap']['Purse']
-        race['betTypes'] = []
+        race['betTypesAvailable'] = self._build_bet_type_aval_list(race_data['bet_type'])
+        race['betTypesCompleted'] = []
         race['results'] = []
         
         try:
             # what happens here can be unpredictable
-            race['betTypes'] = race_data['pool']['Pool'].tolist()
+            race['betTypesCompleted'] = race_data['pool']['Pool'].tolist()
         except:
-            race['betTypes'] = []
+            race['betTypesCompleted'] = []
 
         # build runners... (Yes the table names are backwards)
         runners = race_data['race_results'].rename(

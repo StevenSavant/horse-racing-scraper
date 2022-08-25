@@ -131,12 +131,13 @@ def horse_racing_scrape(days=['all'], debug=False):
                 bet_type_df = pd.DataFrame(columns=['Bet Types','#'])
                 bet_types = race.xpath(".//p[@class='race-wager-text']/text()")[0]
                 for idx,type in enumerate(bet_types.split("/")):
+
                     if idx == 0:
                         ap_dic['Bet Types'] = type.strip()
                         ap_dic['#'] = idx+1
-                    else:
-                        bet_type_df.at[idx-1,'Bet Types'] = type.strip()
-                        bet_type_df.at[idx-1,'#'] = idx+1
+
+                    bet_type_df.at[idx,'Bet Types'] = type.strip()
+                    bet_type_df.at[idx,'#'] = idx+1
                 try:
                     also_rans = race.xpath(".//div[contains(@class,'also-rans')]/text()")[0].replace("Also rans:","").strip()
                     also_rans_df = pd.DataFrame(columns=['Also Rans'])
@@ -165,8 +166,8 @@ def horse_racing_scrape(days=['all'], debug=False):
                     "pool" : pool_df
                 }
 
-                # if len(table_dfs[datekey]) == 2:
-                #     return table_dfs
+                if debug and len(table_dfs[datekey]) == 2:
+                    return table_dfs
                 
                 df = pd.DataFrame()
                 df = df.append(ap_dic, ignore_index=True)
