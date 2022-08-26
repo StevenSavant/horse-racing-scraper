@@ -131,12 +131,13 @@ def horse_racing_scrape(days=['all'], debug=False):
                 bet_type_df = pd.DataFrame(columns=['Bet Types','#'])
                 bet_types = race.xpath(".//p[@class='race-wager-text']/text()")[0]
                 for idx,type in enumerate(bet_types.split("/")):
+
                     if idx == 0:
                         ap_dic['Bet Types'] = type.strip()
                         ap_dic['#'] = idx+1
-                    else:
-                        bet_type_df.at[idx-1,'Bet Types'] = type.strip()
-                        bet_type_df.at[idx-1,'#'] = idx+1
+
+                    bet_type_df.at[idx,'Bet Types'] = type.strip()
+                    bet_type_df.at[idx,'#'] = idx+1
                 try:
                     also_rans = race.xpath(".//div[contains(@class,'also-rans')]/text()")[0].replace("Also rans:","").strip()
                     also_rans_df = pd.DataFrame(columns=['Also Rans'])
@@ -154,7 +155,7 @@ def horse_racing_scrape(days=['all'], debug=False):
                     pool_df = None
 
                 if ap_dic['Race Track'] not in table_dfs[datekey]:
-                    table_dfs[datekey][ap_dic['Race Track']] = {'id' : '00'} # Initialize with temp id
+                    table_dfs[datekey][ap_dic['Race Track']] = {}
                 
                 table_dfs[datekey][ap_dic['Race Track']][ap_dic['Race Number']] = {
                     "ap" : ap_dic, 
@@ -165,6 +166,9 @@ def horse_racing_scrape(days=['all'], debug=False):
                     "pool" : pool_df
                 }
 
+                if debug and len(table_dfs[datekey]) == 2:
+                    return table_dfs
+                
                 df = pd.DataFrame()
                 df = df.append(ap_dic, ignore_index=True)
                 df = df.append(bet_type_df, ignore_index=True)
@@ -186,7 +190,8 @@ def horse_racing_scrape(days=['all'], debug=False):
                 continue
 
         main_df.fillna("",inplace=True)
-        main_df.to_csv(link.split("/")[-1]+"-V3.csv",index=False)
+        # main_df.to_csv(link.split("/")[-1]+"-V3.csv",index=False
+
 
     return table_dfs
 
